@@ -11,6 +11,7 @@ import Iter "mo:base/Iter";
 actor {
   var otherCanisterId : Text = "";
   var maxValue : Nat = 1000;
+  var lastValueWrite: Nat = 1;
   var timings : Trie.Trie<Nat, Int> = Trie.empty();
   var readTimings : Trie.Trie<Nat, Int> = Trie.empty();
 
@@ -19,6 +20,7 @@ actor {
   // canister B type defination
   public type CAN_B = actor {
     trigger: { value: Nat } -> async ();
+    getCurrentValue: query () -> async Nat;
     triggerReadQuery: () -> async ();
   };
 
@@ -51,6 +53,7 @@ actor {
     if(value >= maxValue) {
       Debug.print("Job Completed At: ");
       await printTimeNow();
+      lastValueWrite := value;
       return;
     };
 
@@ -76,7 +79,7 @@ actor {
     readTimings := Trie.empty();
 
     for(i in Iter.range(0, 100)) {
-      await canB.triggerReadQuery();
+      let currentValue = await canB.getCurrentValue();
       let (newTimings, existing) = Trie.put(
           readTimings,
           { key = i; hash = Text.hash(Nat.toText(i))},
@@ -87,8 +90,49 @@ actor {
     };
   };
 
+  public query func getReadOpResult() : async Text {
+    if(Trie.isEmpty(readTimings)) {
+      return "Read operation not completed yet";
+    };
+
+    // get first and last element
+    let first = Trie.get(readTimings, { key = 0; hash = Text.hash(Nat.toText(0))}, Nat.equal);
+    let last = Trie.get(readTimings, { key = 99; hash = Text.hash(Nat.toText(99))}, Nat.equal);
+
+    switch (first, last) {
+      case (?first, ?last) {
+        let diff = last - first;
+        return "Read operation completed in " # Int.toText(diff/1000000000) # " s";
+      };
+      case _ {
+        return "Read operation not completed yet";
+      };
+    };
+  };
+
+  public query func getWriteOpResult(): async Text {
+    if(Trie.isEmpty(timings)) {
+      return "Write operation not completed yet";
+    };
+
+    // get first and last element
+    let first = Trie.get(timings, { key = 1; hash = Text.hash(Nat.toText(1))}, Nat.equal);
+    let last = Trie.get(timings, { key = lastValueWrite; hash = Text.hash(Nat.toText(lastValueWrite))}, Nat.equal);
+
+    switch (first, last) {
+      case (?first, ?last) {
+        let diff = last - first;
+        return "Write operation completed in " # Int.toText(diff/1000000000) # " s";
+      };
+      case _ {
+        return "Write operation not completed yet";
+      };
+    };
+  };
+
   public func reset() : async () {
     timings := Trie.empty();
     readTimings := Trie.empty();
+    lastValueWrite := 1;
   };
 };

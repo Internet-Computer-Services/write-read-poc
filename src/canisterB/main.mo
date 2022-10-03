@@ -11,6 +11,7 @@ import Iter "mo:base/Iter";
 actor {
   var otherCanisterId : Text = "";
   var maxValue : Nat = 1000;
+  var currentValue: Nat = 0;
   var timings : Trie.Trie<Nat, Int> = Trie.empty();
   var readTimings : Trie.Trie<Nat, Int> = Trie.empty();
 
@@ -55,8 +56,8 @@ actor {
     };
 
     // create canister A instance
-    let canB : CAN_A = actor(otherCanisterId);
-    await canB.trigger({ value = value + 1 });
+    let canA : CAN_A = actor(otherCanisterId);
+    await canA.trigger({ value = value + 1 });
   };
 
   public shared query func getWriteOpTimings() : async [(Nat, Int)] {
@@ -69,21 +70,8 @@ actor {
     return result;
   };
 
-  public func triggerReadQuery() : async () {
-    // create canister A instance
-    let canA : CAN_A = actor(otherCanisterId);
-    readTimings := Trie.empty();
-
-    for(i in Iter.range(0, 100)) {
-      await canA.triggerReadQuery();
-      let (newTimings, existing) = Trie.put(
-          readTimings,
-          { key = i; hash = Text.hash(Nat.toText(i))},
-          Nat.equal,
-          Time.now()
-      );
-      readTimings := newTimings;
-    };
+  public shared query func getCurrentValue(): async Nat {
+    return currentValue;
   };
 
   public func reset() : async () {
